@@ -14,21 +14,25 @@ class QItemSelection;
 namespace QtCharts { class QChart; class QChartView; }
 QT_END_NAMESPACE
 
-class ChartController;
+class ChartModel;
+class IChartPrinter;
 
 /**
  * @brief Главное окно — View в MVC.
  *
- * Только виджеты и проводка сигналов: пользовательские намерения уходят в
- * ChartController, готовый график приходит обратно сигналом и отображается.
- * View не знает о парсерах, билдерах, стилях и принтере. Вся вёрстка — на C++
- * (без .ui-форм).
+ * Только виджеты и проводка сигналов: намерения пользователя сигнал-слотовыми
+ * соединениями уходят прямо в модель, готовый график приходит обратно сигналом
+ * chartReady и отображается. Отдельного контроллера в схеме нет — его роль
+ * выполняют эти соединения. Печать выполняется сервисом печати. View не знает о
+ * парсерах, билдерах и стилях. Вся вёрстка — на C++ (без .ui-форм).
  */
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 public:
-    explicit MainWindow(std::unique_ptr<ChartController> controller, QWidget *parent = nullptr);
+    MainWindow(std::unique_ptr<ChartModel> model,
+               std::shared_ptr<IChartPrinter> printer,
+               QWidget *parent = nullptr);
     ~MainWindow() override;
 
 private slots:
@@ -41,7 +45,8 @@ private slots:
 private:
     void buildUi();
 
-    std::unique_ptr<ChartController> m_controller;
+    std::unique_ptr<ChartModel> m_model;
+    std::shared_ptr<IChartPrinter> m_printer;
 
     QFileSystemModel *m_fsModel;
     QTableView *m_fileView;

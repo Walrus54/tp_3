@@ -6,7 +6,6 @@
 #include "charts/ColorChartStyle.h"
 #include "charts/GrayChartStyle.h"
 #include "charts/PieChartBuilder.h"
-#include "controller/ChartController.h"
 #include "data/IDatabaseManager.h"
 #include "data/JsonDataReader.h"
 #include "data/ReaderRegistry.h"
@@ -58,11 +57,12 @@ static MainWindow *createMainWindow()
     styles["color"] = [] { return std::make_shared<ColorChartStyle>(); };
     styles["gray"] = [] { return std::make_shared<GrayChartStyle>(); };
 
-    auto model = std::make_unique<ChartModel>(registry);
-    auto controller = std::make_unique<ChartController>(
-        std::move(builders), std::move(styles), printer, std::move(model));
+    // Модель собирает график выбранным билдером/стилем; View связывается с ней
+    // напрямую сигнал-слотовыми соединениями — отдельного контроллера нет.
+    auto model = std::make_unique<ChartModel>(
+        registry, std::move(builders), std::move(styles));
 
-    return new MainWindow(std::move(controller));
+    return new MainWindow(std::move(model), printer);
 }
 
 int main(int argc, char *argv[])

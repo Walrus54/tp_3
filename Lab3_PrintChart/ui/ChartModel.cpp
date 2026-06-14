@@ -1,9 +1,17 @@
 #include "ui/ChartModel.h"
 
+#include <QtCharts/QChart>
+
 #include <utility>
+
+QT_CHARTS_USE_NAMESPACE
 
 namespace
 {
+// Имена стилей, под которыми они зарегистрированы в композиционном корне.
+const QString kStyleColor = "color";
+const QString kStyleGray = "gray";
+
 // Путь к файлу из source ("путь" либо "путь|таблица").
 QString sourcePath(const QString &source)
 {
@@ -12,10 +20,19 @@ QString sourcePath(const QString &source)
 }
 } // namespace
 
-ChartModel::ChartModel(std::shared_ptr<IReaderRegistry> registry, QObject *parent)
+ChartModel::ChartModel(std::shared_ptr<IReaderRegistry> registry,
+                       BuilderFactory builders,
+                       StyleFactory styles,
+                       QObject *parent)
     : QObject(parent)
     , m_registry(std::move(registry))
+    , m_builders(std::move(builders))
+    , m_styles(std::move(styles))
 {
+    // Параметры отображения по умолчанию.
+    if (!m_builders.isEmpty())
+        m_builder = m_builders.firstKey();
+    m_style = kStyleColor;
 }
 
 bool ChartModel::hasData() const
@@ -23,19 +40,9 @@ bool ChartModel::hasData() const
     return m_hasData;
 }
 
-const Series &ChartModel::data() const
+QStringList ChartModel::chartTypes() const
 {
-    return m_data;
-}
-
-const QString &ChartModel::builder() const
-{
-    return m_builder;
-}
-
-const QString &ChartModel::style() const
-{
-    return m_style;
+    return m_builders.keys();
 }
 
 QStringList ChartModel::listSubSources(const QString &filePath) const
@@ -60,21 +67,46 @@ void ChartModel::setSource(const QString &source)
 
     m_data = std::move(series);
     m_hasData = true;
-    emit dataChanged();
+    rebuildChart();
 }
 
-void ChartModel::setBuilder(const QString &builder)
+void ChartModel::setChartType(const QString &name)
 {
-    if (builder == m_builder)
+    if (name == m_builder)
         return;
-    m_builder = builder;
-    emit renderOptionsChanged();
+    m_builder = name;
+    rebuildChart();
 }
 
-void ChartModel::setStyle(const QString &style)
+void ChartModel::setGrayscale(bool grayscale)
 {
+    const QString style = grayscale ? kStyleGray : kStyleColor;
     if (style == m_style)
         return;
     m_style = style;
-    emit renderOptionsChanged();
+    rebuildChart();
+}
+
+void ChartModel::rebuildChart()
+{
+    if (!m_hasData)
+        return;
+    if (QChart *chart = buildChart())
+        emit chartReady(chart);
+}
+
+QChart *ChartModel::buildChart() const
+{
+    auto builderFactory = m_builders.value(m_builder);
+    auto styleFactory = m_styles.value(m_style);
+    if (!builderFactory || !styleFactory)
+        return nullptr;
+
+    auto builder = builderFactory();
+    auto style = styleFactory();
+
+    // Билдер красит элементы палитрой стиля, затем стиль задаёт общую тему/фон.
+    QChart *chart = builder->build(m_data, *style);
+    style->apply(chart);
+    return chart;
 }

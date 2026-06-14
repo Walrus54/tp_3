@@ -22,7 +22,8 @@
 
 #include <utility>
 
-#include "controller/ChartController.h"
+#include "print/IChartPrinter.h"
+#include "ui/ChartModel.h"
 
 QT_CHARTS_USE_NAMESPACE
 
@@ -38,15 +39,18 @@ constexpr int kChartStretch = 3;
 const QString kSourceSeparator = "|";
 } // namespace
 
-MainWindow::MainWindow(std::unique_ptr<ChartController> controller, QWidget *parent)
+MainWindow::MainWindow(std::unique_ptr<ChartModel> model,
+                       std::shared_ptr<IChartPrinter> printer,
+                       QWidget *parent)
     : QMainWindow(parent)
-    , m_controller(std::move(controller))
+    , m_model(std::move(model))
+    , m_printer(std::move(printer))
 {
     buildUi();
 
-    // View реагирует только на сигналы контроллера.
-    connect(m_controller.get(), &ChartController::chartReady, this, &MainWindow::displayChart);
-    connect(m_controller.get(), &ChartController::errorOccurred, this, &MainWindow::showError);
+    // Готовый график и ошибки приходят из модели сигналами — контроллера нет.
+    connect(m_model.get(), &ChartModel::chartReady, this, &MainWindow::displayChart);
+    connect(m_model.get(), &ChartModel::errorOccurred, this, &MainWindow::showError);
 }
 
 MainWindow::~MainWindow() = default;
@@ -73,12 +77,12 @@ void MainWindow::buildUi()
 
     // --- Верхняя панель управления ---
     m_chartTypeBox = new QComboBox(this);
-    m_chartTypeBox->addItems(m_controller->chartTypes());
+    m_chartTypeBox->addItems(m_model->chartTypes());
     connect(m_chartTypeBox, &QComboBox::currentTextChanged,
-            m_controller.get(), &ChartController::selectChartType);
+            m_model.get(), &ChartModel::setChartType);
 
     m_grayCheck = new QCheckBox("Черно-белый график", this);
-    connect(m_grayCheck, &QCheckBox::toggled, m_controller.get(), &ChartController::selectStyle);
+    connect(m_grayCheck, &QCheckBox::toggled, m_model.get(), &ChartModel::setGrayscale);
 
     m_openDirButton = new QPushButton("Папка с данными…", this);
     connect(m_openDirButton, &QPushButton::clicked, this, &MainWindow::onOpenDirClicked);
@@ -127,7 +131,7 @@ void MainWindow::onFileSelectionChanged(const QItemSelection &selected, const QI
 
     // Если в файле несколько под-источников (таблиц БД) — даём выбрать.
     QString source = filePath;
-    const QStringList subs = m_controller->subSourcesFor(filePath);
+    const QStringList subs = m_model->listSubSources(filePath);
     if (subs.size() > 1) {
         bool ok = false;
         const QString table = QInputDialog::getItem(
@@ -137,7 +141,7 @@ void MainWindow::onFileSelectionChanged(const QItemSelection &selected, const QI
         source = filePath + kSourceSeparator + table;
     }
 
-    m_controller->selectSource(source);
+    m_model->setSource(source);
 }
 
 void MainWindow::onOpenDirClicked()
@@ -155,7 +159,7 @@ void MainWindow::onOpenDirClicked()
 
 void MainWindow::onPrintClicked()
 {
-    if (!m_controller->hasData()) {
+    if (!m_model->hasData()) {
         QMessageBox::information(this, "Печать", "Сначала выберите файл с данными.");
         return;
     }
@@ -167,7 +171,7 @@ void MainWindow::onPrintClicked()
     if (filePath.isEmpty())
         return;
 
-    if (m_controller->printChart(m_chartView, filePath))
+    if (m_printer->print(m_chartView, filePath, m_grayCheck->isChecked()))
         statusBar()->showMessage("График сохранён : " + filePath);
     else
         QMessageBox::warning(this, "Печать", "Не удалось сохранить PDF.");

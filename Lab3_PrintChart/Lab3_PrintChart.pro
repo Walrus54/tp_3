@@ -18,7 +18,6 @@ SOURCES += \
     charts/ColorChartStyle.cpp \
     charts/GrayChartStyle.cpp \
     print/PdfChartPrinter.cpp \
-    controller/ChartController.cpp \
     ui/ChartModel.cpp \
     ui/MainWindow.cpp
 
@@ -42,7 +41,6 @@ HEADERS += \
     charts/GrayChartStyle.h \
     print/IChartPrinter.h \
     print/PdfChartPrinter.h \
-    controller/ChartController.h \
     ui/ChartModel.h \
     ui/MainWindow.h
 
